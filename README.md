@@ -30,7 +30,7 @@ This is a simple CRUD backend API built with Go 1.25.6, PostgreSQL, JWT authenti
 - **Refresh**: POST /refresh - Hanya pakai refresh token di cookie (tidak perlu access token). Mengembalikan access token baru.
 - **Logout**: POST /api/logout - **Memerlukan** `Authorization: Bearer <access_token>`. Menghapus refresh token dan cookie.
 
-## API Endpoints
+## API Endpoints (https://7n2q5l0qq1.apidog.io/ - pass : madio123)
 
 Endpoint yang memerlukan **access token** (header: `Authorization: Bearer <access_token>`):
 
