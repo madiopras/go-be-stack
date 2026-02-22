@@ -80,6 +80,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Assign default role "user" to new user
+	_, _ = database.DB.Exec("INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE code = 'user' LIMIT 1 ON CONFLICT (user_id, role_id) DO NOTHING", user.ID)
+
 	// Generate tokens
 	accessToken, refreshToken, err := generateTokens(user.ID)
 	if err != nil {

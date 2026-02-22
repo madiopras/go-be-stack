@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"betest/internal/response"
+	"betest/internal/rbac"
 	"context"
 	"crypto/rsa"
 	"fmt"
@@ -11,6 +12,11 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// ContextKey type for context keys
+type ContextKey string
+
+const UserIDContextKey ContextKey = "user_id"
 
 var (
 	PublicKey *rsa.PublicKey // Will be set from main or auth
@@ -51,7 +57,7 @@ func JWTMiddleware(next http.Handler) http.Handler {
 			}
 
 			userID := int(claims["user_id"].(float64))
-			ctx := context.WithValue(r.Context(), "user_id", userID)
+			ctx := context.WithValue(r.Context(), UserIDContextKey, userID)
 			r = r.WithContext(ctx)
 		} else {
 			response.SendError(w, http.StatusUnauthorized, "Invalid token claims")
@@ -60,4 +66,40 @@ func JWTMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// GetUserID returns the authenticated user ID from request context, or 0 if not set.
+func GetUserID(r *http.Request) int {
+	v := r.Context().Value(UserIDContextKey)
+	if v == nil {
+		return 0
+	}
+	if id, ok := v.(int); ok {
+		return id
+	}
+	return 0
+}
+
+// RequirePermission returns middleware that allows access only if the user has the given permission code.
+// Must be used after JWTMiddleware.
+func RequirePermission(permissionCode string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID := GetUserID(r)
+			if userID == 0 {
+				response.SendError(w, http.StatusUnauthorized, "Unauthorized")
+				return
+			}
+			ok, err := rbac.HasPermission(r.Context(), userID, permissionCode)
+			if err != nil {
+				response.SendError(w, http.StatusInternalServerError, "Error checking permission")
+				return
+			}
+			if !ok {
+				response.SendError(w, http.StatusForbidden, "Forbidden: insufficient permission")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

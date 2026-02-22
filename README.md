@@ -21,7 +21,8 @@ This is a simple CRUD backend API built with Go 1.25.6, PostgreSQL, JWT authenti
    );
 
    ```
-7. Run the server: `go run main.go`
+7. Run the server: `go run main.go`  
+   - Migrasi RBAC (tabel `roles`, `permissions`, `user_roles`, `role_permissions`, `organizations`, `organization_users`) dijalankan otomatis dari folder `migrations/`.
 
 ## Authentication
 
@@ -35,11 +36,164 @@ This is a simple CRUD backend API built with Go 1.25.6, PostgreSQL, JWT authenti
 Endpoint yang memerlukan **access token** (header: `Authorization: Bearer <access_token>`):
 
 - POST /api/logout - Logout (invalidate session)
-- GET /api/users - Get all users (dengan pagination)
-- GET /api/users/{id} - Get user by ID
-- POST /api/users - Create a new user (JSON body: {"name": "string", "email": "string"})
-- PUT /api/users/{id} - Update user by ID
-- DELETE /api/users/{id} - Delete user by ID
+- **Users** (permission: users:list / users:read / users:create / users:update / users:delete)
+  - GET /api/users - Get all users (pagination)
+  - GET /api/users/{id} - Get user by ID
+  - POST /api/users - Create user
+  - PUT /api/users/{id} - Update user
+  - DELETE /api/users/{id} - Delete user
+- **Roles** (permission: roles:manage)
+  - GET /api/roles - List roles
+  - GET /api/roles/{id} - Get role
+  - POST /api/roles - Create role
+  - PUT /api/roles/{id} - Update role
+  - DELETE /api/roles/{id} - Delete role
+- **Permissions** (permission: roles:manage)
+  - GET /api/permissions - List permissions
+  - GET /api/permissions/{id} - Get permission
+  - GET /api/permissions/roles/{roleId} - Permissions of a role
+  - POST /api/permissions/roles/{roleId}/permissions/{permissionId} - Assign permission to role
+  - DELETE /api/permissions/roles/{roleId}/permissions/{permissionId} - Revoke permission from role
+- **User roles** (permission: roles:manage)
+  - GET /api/users/{userId}/roles - List roles of user
+  - POST /api/users/{userId}/roles - Assign role (body: `{"role_id": 1}`)
+  - DELETE /api/users/{userId}/roles/{roleId} - Revoke role from user
+- **Organizations** (permission: organizations:manage)
+  - GET /api/organizations - List organizations (pagination)
+  - GET /api/organizations/{id} - Get organization
+  - POST /api/organizations - Create organization
+  - PUT /api/organizations/{id} - Update organization
+  - DELETE /api/organizations/{id} - Delete organization
+  - GET /api/organizations/{id}/users - List members
+  - POST /api/organizations/{id}/users - Add member (body: `{"user_id": 1, "role_id": 2}` optional)
+  - DELETE /api/organizations/{id}/users/{userId} - Remove member
+
+## Request Body (endpoint yang memerlukan body)
+
+Semua request body berikut menggunakan **Content-Type: application/json**.
+
+### Auth (public)
+
+**POST /register**
+```json
+{
+  "name": "string (required)",
+  "email": "string (required)",
+  "password": "string (required)"
+}
+```
+
+**POST /login**
+```json
+{
+  "email": "string (required)",
+  "password": "string (required)"
+}
+```
+
+### Users (protected)
+
+**POST /api/users**
+```json
+{
+  "name": "string (required)",
+  "email": "string (required)"
+}
+```
+
+**PUT /api/users/{id}**
+```json
+{
+  "name": "string (required)",
+  "email": "string (required)"
+}
+```
+
+### Roles (protected, permission: roles:manage)
+
+**POST /api/roles**
+```json
+{
+  "name": "string (required)",
+  "code": "string (required, unique)",
+  "description": "string (optional)"
+}
+```
+
+**PUT /api/roles/{id}**
+```json
+{
+  "name": "string (required)",
+  "code": "string (required)",
+  "description": "string (optional)"
+}
+```
+
+### User roles (protected, permission: roles:manage)
+
+**POST /api/users/{userId}/roles**
+```json
+{
+  "role_id": 1
+}
+```
+
+### Organizations (protected, permission: organizations:manage)
+
+**POST /api/organizations**
+```json
+{
+  "name": "string (required)",
+  "code": "string (required, unique)",
+  "description": "string (optional)"
+}
+```
+
+**PUT /api/organizations/{id}**
+```json
+{
+  "name": "string (required)",
+  "code": "string (required)",
+  "description": "string (optional)"
+}
+```
+
+**POST /api/organizations/{id}/users**
+```json
+{
+  "user_id": 1,
+  "role_id": 2
+}
+```
+- `user_id` (required): ID user yang ditambahkan ke organisasi.
+- `role_id` (optional): ID role user di organisasi tersebut. Bisa tidak dikirim (null).
+
+---
+
+**Catatan:** Endpoint GET dan DELETE tidak memakai request body. Assign/revoke permission ke role memakai URL path (`/api/permissions/roles/{roleId}/permissions/{permissionId}`), tidak ada body.
+
+## RBAC (Role-Based Access Control)
+
+Sistem mengontrol akses berdasarkan **permission** (kode aksi pada resource). User punya **roles**, tiap role punya **permissions**. Akses API dicek per endpoint.
+
+**Tabel:**
+- `users` - User (sudah ada)
+- `roles` - Role (name, code, description)
+- `permissions` - Permission (name, code, resource, action)
+- `user_roles` - User ↔ Role (many-to-many)
+- `role_permissions` - Role ↔ Permission (many-to-many)
+- `organizations` - Organisasi
+- `organization_users` - User dalam organisasi (bisa punya role di org)
+
+**Role default (seed):**
+- `super_admin` - Semua permission
+- `admin` - users, roles, organizations (tanpa permissions:manage)
+- `user` - users:list, users:read
+
+**Permission default (seed):**  
+`users:list`, `users:read`, `users:create`, `users:update`, `users:delete`, `roles:manage`, `permissions:manage`, `organizations:manage`.
+
+User baru dari **Register** otomatis diberi role **user**. Untuk akses admin, assign role `admin` atau `super_admin` lewat API (perlu token user yang sudah punya `roles:manage`). User pertama bisa diberi role `super_admin` manual di DB: `INSERT INTO user_roles (user_id, role_id) SELECT 1, id FROM roles WHERE code = 'super_admin' LIMIT 1;` (ganti `1` dengan ID user).
 
 ## How to Use the API
 
@@ -231,8 +385,10 @@ Menghapus refresh token dari Redis dan menghapus cookie. Hanya user yang sedang 
 - Use tools like Postman or cURL for testing.
 - Ensure PostgreSQL and Redis are running.
 
-- `internal/models/` - Data models
-- `internal/database/` - Database connection
-- `internal/handlers/` - HTTP handlers (auth and user)
-- `internal/middleware/` - JWT middleware
+- `internal/models/` - Data models (user, role, permission, organization)
+- `internal/database/` - DB connection + migrations
+- `internal/handlers/` - HTTP handlers (auth, user, role, permission, organization)
+- `internal/middleware/` - JWT + RBAC (RequirePermission)
+- `internal/rbac/` - GetUserPermissionCodes, HasPermission
 - `internal/routes/` - Route setup
+- `migrations/` - SQL migrations (RBAC tables + seed)

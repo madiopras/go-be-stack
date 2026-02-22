@@ -22,5 +22,9 @@ func InitDB() {
 		log.Fatal(err)
 	}
 
+	if err = RunMigrations("migrations"); err != nil {
+		log.Fatalf("Migrations failed: %v", err)
+	}
+
 	fmt.Println("Connected to database")
 }
