@@ -24,10 +24,13 @@ func main() {
 	middleware.Rdb = handlers.Rdb
 
 	r := routes.SetupRoutes()
+	// CORS must wrap the entire router so preflight OPTIONS get CORS headers
+	// (Gorilla mux only runs route middleware when a route matches; OPTIONS often doesn't match.)
+	handler := middleware.CORS(r)
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: r,
+		Handler: handler,
 	}
 
 	// Jalankan server di goroutine

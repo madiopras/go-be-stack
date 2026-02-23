@@ -142,7 +142,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   false,                // untuk prod ubah true,
+		SameSite: http.SameSiteLaxMode, //untuk prod ubah http.SameSiteNoneMode,
 		Path:     "/",
 		MaxAge:   7 * 24 * 3600,
 	})
@@ -222,7 +223,8 @@ func RefreshToken(w http.ResponseWriter, r *http.Request) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   false,                // untuk prod ubah true,
+		SameSite: http.SameSiteLaxMode, //untuk prod ubah http.SameSiteNoneMode,
 		Path:     "/",
 		MaxAge:   7 * 24 * 3600,
 	})

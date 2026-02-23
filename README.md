@@ -379,6 +379,27 @@ GET /api/users  (akan menggunakan default: page=1, limit=10)
 
 Menghapus refresh token dari Redis dan menghapus cookie. Hanya user yang sedang login (punya access token valid) yang bisa memanggil logout.
 
+### Skenario: Access token sudah expired dan user tidak melakukan refresh
+
+**Pertanyaan:** Apakah refresh token akan terhapus atau di-blacklist?
+
+**Jawaban:** **Tidak.** Refresh token **tetap valid** sampai:
+- masa berlaku habis (7 hari), atau
+- user **logout** (refresh token dihapus dari Redis + cookie), atau
+- refresh token **dipakai** untuk refresh (token di-rotate, yang lama dihapus).
+
+**Alasan (saran terbaik):**
+- Tujuan refresh token adalah agar user bisa mendapat **access token baru** setelah access token lama kadaluarsa. Jadi wajar jika user tidak refresh selama access token masih valid, lalu baru memanggil `POST /refresh` setelah access token expired.
+- Jika refresh token ikut dihapus/di-blacklist hanya karena access token expired, user akan ter-logout paksa dan harus login lagi. Itu buruk untuk UX dan tidak standar.
+- Access token yang sudah expired **tidak perlu** di-blacklist: middleware menolak JWT yang `exp`-nya sudah lewat. Key Redis `access_token:{jti}` juga punya TTL 15 menit sehingga otomatis hilang.
+
+**Ringkas:**
+| Kejadian | Access token | Refresh token |
+|----------|--------------|---------------|
+| Access token expired, user tidak refresh | Ditolak (JWT exp) | Tetap valid, bisa dipakai untuk `POST /refresh` |
+| User logout | Di-blacklist | Dihapus dari Redis + cookie |
+| User panggil refresh | Yang lama di-blacklist, dapat yang baru | Yang lama dihapus (rotation), dapat yang baru |
+
 ### Notes
 - Access tokens expire in 15 minutes.
 - Refresh tokens expire in 7 days and are stored in HTTP-only cookies.

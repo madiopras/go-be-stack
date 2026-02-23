@@ -10,6 +10,10 @@ import (
 
 func SetupRoutes() *mux.Router {
 	r := mux.NewRouter()
+	// CORS is applied in main.go around the whole router so OPTIONS preflight is handled
+
+	// Health check (public, no auth)
+	r.HandleFunc("/health", handlers.Health).Methods("GET")
 
 	// Auth routes (public)
 	r.HandleFunc("/register", handlers.Register).Methods("POST")
